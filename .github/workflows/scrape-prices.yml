@@ -24,6 +24,7 @@ jobs:
       APP_ENV: production
       AUTH_DISABLED: "true"
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DB_SCHEMA: price_monitor_dashboard
       DEFAULT_CURRENCY: BRL
     steps:
       - name: Checkout
