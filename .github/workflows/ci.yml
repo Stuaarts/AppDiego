@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -e .
+
+      - name: Ruff check
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Test
+        env:
+          DATABASE_URL: sqlite:///ci_price_monitor.db
+          AUTH_DISABLED: "true"
+        run: pytest -v
+
+      - name: Validate migrations
+        env:
+          DATABASE_URL: sqlite:///ci_price_monitor.db
+          AUTH_DISABLED: "true"
+        run: alembic upgrade head
+
+      - name: Health check
+        env:
+          DATABASE_URL: sqlite:///ci_price_monitor.db
+          AUTH_DISABLED: "true"
+        run: python -m price_monitor.cli healthcheck
+
+      - name: Build Docker image
+        run: docker build -t price-monitor-dashboard .

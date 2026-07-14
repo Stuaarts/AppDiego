@@ -1,0 +1,60 @@
+name: Scheduled price collection
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      product_id:
+        description: "Optional product ID"
+        required: false
+      listing_id:
+        description: "Optional listing ID"
+        required: false
+
+concurrency:
+  group: scheduled-price-collection
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP_ENV: production
+      AUTH_DISABLED: "false"
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      APP_PASSWORD_HASH: ${{ secrets.APP_PASSWORD_HASH }}
+      DEFAULT_CURRENCY: BRL
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Install Chromium
+        run: python -m playwright install chromium
+
+      - name: Run migrations
+        run: alembic upgrade head
+
+      - name: Scrape prices
+        shell: bash
+        run: |
+          args=(--all --trigger scheduled_github)
+          if [ -n "${{ github.event.inputs.product_id }}" ]; then
+            args=(--product-id "${{ github.event.inputs.product_id }}" --trigger scheduled_github)
+          fi
+          if [ -n "${{ github.event.inputs.listing_id }}" ]; then
+            args=(--listing-id "${{ github.event.inputs.listing_id }}" --trigger scheduled_github)
+          fi
+          python -m price_monitor.cli scrape "${args[@]}"

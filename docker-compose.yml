@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: price_monitor
+      POSTGRES_PASSWORD: price_monitor
+      POSTGRES_DB: price_monitor
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U price_monitor -d price_monitor"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    environment:
+      APP_ENV: development
+      AUTH_DISABLED: "true"
+      DATABASE_URL: postgresql+psycopg://price_monitor:price_monitor@db:5432/price_monitor
+    ports:
+      - "8501:8501"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: price-monitor-dashboard
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: AUTH_DISABLED
+        value: "false"
+      - key: DEFAULT_CURRENCY
+        value: BRL
+      - key: DISPLAY_TIMEZONE
+        value: America/Sao_Paulo
+      - key: REQUEST_TIMEOUT_SECONDS
+        value: "20"
+      - key: MAX_RETRIES
+        value: "2"
+      - key: GLOBAL_SCRAPE_CONCURRENCY
+        value: "4"
+      - key: DOMAIN_SCRAPE_CONCURRENCY
+        value: "1"
+      - key: BROWSER_CONCURRENCY
+        value: "1"
+      - key: MAX_RESPONSE_BYTES
+        value: "5000000"
+      - key: STALE_AFTER_HOURS
+        value: "24"
+      - key: PLAYWRIGHT_ENABLED
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: APP_PASSWORD_HASH
+        sync: false
