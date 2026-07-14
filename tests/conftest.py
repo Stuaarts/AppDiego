@@ -36,6 +36,8 @@ def test_settings() -> Settings:
         display_timezone="America/Sao_Paulo",
         log_level="INFO",
         playwright_enabled=False,
+        enable_internal_scheduler=False,
+        internal_scrape_interval_hours=6,
         app_base_url="",
     )
 

@@ -184,12 +184,11 @@ Selectors are listing-specific overrides. Prefer stable product metadata when av
 
 `.github/workflows/scrape-prices.yml` runs at `0 */6 * * *` UTC and supports `workflow_dispatch`.
 
-- For Neon or another externally reachable PostgreSQL provider, the workflow can run the CLI directly with `DATABASE_URL`.
-- For Render free Postgres, external connections from GitHub Actions can fail. This repository uses the free fallback: GitHub Actions triggers a Render one-off job, which runs inside Render with the web service's internal database URL.
+For Render free Postgres, external connections from GitHub Actions can fail and one-off jobs are not available on this free service. This repository uses the free fallback: the Render web container runs an internal scheduler when `ENABLE_INTERNAL_SCHEDULER=true`, and GitHub Actions wakes the web service by calling `/_stcore/health`.
 
 The workflow records individual listing failures without failing the entire run unless the run cannot start.
 
-The scheduled workflow needs `RENDER_API_KEY` as a GitHub Actions secret when using the Render one-off job fallback. The dashboard password hash belongs in Render's environment variables.
+The dashboard password hash belongs in Render's environment variables.
 
 ## Neon Setup
 

@@ -50,6 +50,8 @@ class Settings:
     display_timezone: str
     log_level: str
     playwright_enabled: bool
+    enable_internal_scheduler: bool
+    internal_scrape_interval_hours: int
     app_base_url: str
 
     @property
@@ -92,6 +94,8 @@ def load_settings(validate: bool = True) -> Settings:
         display_timezone=_str("DISPLAY_TIMEZONE", "America/Sao_Paulo") or "America/Sao_Paulo",
         log_level=(_str("LOG_LEVEL", "INFO") or "INFO").upper(),
         playwright_enabled=_bool("PLAYWRIGHT_ENABLED", True),
+        enable_internal_scheduler=_bool("ENABLE_INTERNAL_SCHEDULER", False),
+        internal_scrape_interval_hours=_int("INTERNAL_SCRAPE_INTERVAL_HOURS", 6, 1),
         app_base_url=_str("APP_BASE_URL", ""),
     )
     if validate:

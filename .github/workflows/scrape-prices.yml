@@ -21,24 +21,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      RENDER_SERVICE_ID: srv-d9b89f5aeets73ai1csg
+      APP_BASE_URL: https://price-monitor-dashboard.onrender.com
     steps:
-      - name: Trigger Render scrape job
+      - name: Wake Render service
         shell: bash
         run: |
-          command="python -m price_monitor.cli scrape --all --trigger scheduled_github"
-          if [ -n "${{ github.event.inputs.product_id }}" ]; then
-            command="python -m price_monitor.cli scrape --product-id ${{ github.event.inputs.product_id }} --trigger scheduled_github"
-          fi
-          if [ -n "${{ github.event.inputs.listing_id }}" ]; then
-            command="python -m price_monitor.cli scrape --listing-id ${{ github.event.inputs.listing_id }} --trigger scheduled_github"
-          fi
-          payload=$(jq -n --arg startCommand "$command" '{startCommand: $startCommand}')
-          response=$(curl -fsS \
-            -X POST \
-            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/jobs" \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-            -H "Accept: application/json" \
-            -H "Content-Type: application/json" \
-            --data "$payload")
-          echo "$response" | jq '(.job // .) | {id: .id, status: .status, startCommand: .startCommand}'
+          curl -fsS --retry 10 --retry-delay 15 --retry-all-errors \
+            "${APP_BASE_URL}/_stcore/health"
+          echo
+          echo "Render service is awake. Internal scheduler will run due price collection."
