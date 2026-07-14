@@ -13,6 +13,7 @@ def render(_session_factory: sessionmaker[Session], settings: Settings) -> None:
     rows = [
         ("Ambiente", settings.app_env),
         ("Banco", redact_database_url(settings.database_url)),
+        ("Schema", settings.database_schema or "padrao"),
         ("Autenticacao desativada", settings.auth_disabled),
         ("Moeda padrao", settings.default_currency),
         ("Timeout HTTP", settings.request_timeout_seconds),

@@ -125,6 +125,7 @@ See `.env.example` for the complete list. Production requires:
 
 - `APP_ENV=production`
 - `DATABASE_URL`
+- `DB_SCHEMA` when sharing a PostgreSQL instance with another app
 - `AUTH_DISABLED=false`
 - `APP_PASSWORD_HASH`
 
@@ -143,6 +144,8 @@ alembic upgrade head
 ```
 
 The Docker start command runs migrations before starting Streamlit. Avoid automatic demo seeding in production.
+
+If you must share a PostgreSQL instance on a free tier, set `DB_SCHEMA` to a dedicated schema name such as `price_monitor_dashboard`. The container creates the schema before running Alembic and keeps this app's tables isolated from other applications in the same database.
 
 ## Demo Seeding
 

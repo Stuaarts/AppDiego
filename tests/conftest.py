@@ -22,6 +22,7 @@ def test_settings() -> Settings:
     return Settings(
         app_env="development",
         database_url="sqlite://",
+        database_schema="",
         app_password_hash="",
         auth_disabled=True,
         default_currency="BRL",

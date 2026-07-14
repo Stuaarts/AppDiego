@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -18,9 +19,26 @@ def normalize_database_url(url: str) -> str:
     return url
 
 
+def apply_database_schema(url: str, schema: str) -> str:
+    if not schema or url.startswith("sqlite"):
+        return url
+    parsed = urlsplit(url)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    options = query.get("options", "")
+    search_path = f"-csearch_path={schema},public"
+    if search_path not in options:
+        query["options"] = f"{options} {search_path}".strip()
+    return urlunsplit(
+        (parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment)
+    )
+
+
 def make_engine(settings: Settings | None = None, **kwargs: Any) -> Engine:
     settings = settings or load_settings()
-    url = normalize_database_url(settings.database_url)
+    url = apply_database_schema(
+        normalize_database_url(settings.database_url),
+        settings.database_schema,
+    )
     connect_args: dict[str, Any] = {}
     if url.startswith("sqlite"):
         connect_args["check_same_thread"] = False

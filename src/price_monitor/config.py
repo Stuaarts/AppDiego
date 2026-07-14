@@ -36,6 +36,7 @@ def _str(name: str, default: str = "") -> str:
 class Settings:
     app_env: str
     database_url: str
+    database_schema: str
     app_password_hash: str
     auth_disabled: bool
     default_currency: str
@@ -77,6 +78,7 @@ def load_settings(validate: bool = True) -> Settings:
     settings = Settings(
         app_env=_str("APP_ENV", "development") or "development",
         database_url=_str("DATABASE_URL", "") or default_sqlite_url(),
+        database_schema=_str("DB_SCHEMA", ""),
         app_password_hash=_str("APP_PASSWORD_HASH", ""),
         auth_disabled=_bool("AUTH_DISABLED", True),
         default_currency=(_str("DEFAULT_CURRENCY", "BRL") or "BRL").upper(),

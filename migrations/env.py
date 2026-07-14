@@ -6,7 +6,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from price_monitor.config import load_settings
-from price_monitor.database import normalize_database_url
+from price_monitor.database import apply_database_schema, normalize_database_url
 from price_monitor.models import Base
 
 config = context.config
@@ -19,7 +19,10 @@ target_metadata = Base.metadata
 
 def get_url() -> str:
     settings = load_settings(validate=False)
-    return normalize_database_url(settings.database_url)
+    return apply_database_schema(
+        normalize_database_url(settings.database_url),
+        settings.database_schema,
+    )
 
 
 def run_migrations_offline() -> None:
