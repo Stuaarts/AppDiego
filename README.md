@@ -186,6 +186,8 @@ Selectors are listing-specific overrides. Prefer stable product metadata when av
 
 The workflow records individual listing failures without failing the entire run unless the run cannot start.
 
+The scheduled workflow does not serve the dashboard UI, so it only requires `DATABASE_URL`. The dashboard password hash belongs in Render's environment variables.
+
 ## Neon Setup
 
 1. Create a Neon free project and a dedicated database.

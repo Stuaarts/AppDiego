@@ -22,9 +22,8 @@ jobs:
     timeout-minutes: 30
     env:
       APP_ENV: production
-      AUTH_DISABLED: "false"
+      AUTH_DISABLED: "true"
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      APP_PASSWORD_HASH: ${{ secrets.APP_PASSWORD_HASH }}
       DEFAULT_CURRENCY: BRL
     steps:
       - name: Checkout
