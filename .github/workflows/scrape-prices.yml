@@ -19,42 +19,26 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     env:
-      APP_ENV: production
-      AUTH_DISABLED: "true"
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      DB_SCHEMA: price_monitor_dashboard
-      DEFAULT_CURRENCY: BRL
+      RENDER_SERVICE_ID: srv-d9b89f5aeets73ai1csg
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install -e .
-
-      - name: Install Chromium
-        run: python -m playwright install chromium
-
-      - name: Run migrations
-        run: alembic upgrade head
-
-      - name: Scrape prices
+      - name: Trigger Render scrape job
         shell: bash
         run: |
-          args=(--all --trigger scheduled_github)
+          command="python -m price_monitor.cli scrape --all --trigger scheduled_github"
           if [ -n "${{ github.event.inputs.product_id }}" ]; then
-            args=(--product-id "${{ github.event.inputs.product_id }}" --trigger scheduled_github)
+            command="python -m price_monitor.cli scrape --product-id ${{ github.event.inputs.product_id }} --trigger scheduled_github"
           fi
           if [ -n "${{ github.event.inputs.listing_id }}" ]; then
-            args=(--listing-id "${{ github.event.inputs.listing_id }}" --trigger scheduled_github)
+            command="python -m price_monitor.cli scrape --listing-id ${{ github.event.inputs.listing_id }} --trigger scheduled_github"
           fi
-          python -m price_monitor.cli scrape "${args[@]}"
+          payload=$(jq -n --arg startCommand "$command" '{startCommand: $startCommand}')
+          response=$(curl -fsS \
+            -X POST \
+            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/jobs" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            --data "$payload")
+          echo "$response" | jq '(.job // .) | {id: .id, status: .status, startCommand: .startCommand}'

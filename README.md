@@ -182,14 +182,14 @@ Selectors are listing-specific overrides. Prefer stable product metadata when av
 
 ## GitHub Actions Scheduling
 
-`.github/workflows/scrape-prices.yml` runs at `0 */6 * * *` UTC and supports `workflow_dispatch`. Configure repository secrets:
+`.github/workflows/scrape-prices.yml` runs at `0 */6 * * *` UTC and supports `workflow_dispatch`.
 
-- `DATABASE_URL`
-- `APP_PASSWORD_HASH` if production settings are reused by the workflow
+- For Neon or another externally reachable PostgreSQL provider, the workflow can run the CLI directly with `DATABASE_URL`.
+- For Render free Postgres, external connections from GitHub Actions can fail. This repository uses the free fallback: GitHub Actions triggers a Render one-off job, which runs inside Render with the web service's internal database URL.
 
 The workflow records individual listing failures without failing the entire run unless the run cannot start.
 
-The scheduled workflow does not serve the dashboard UI, so it only requires `DATABASE_URL`. The dashboard password hash belongs in Render's environment variables.
+The scheduled workflow needs `RENDER_API_KEY` as a GitHub Actions secret when using the Render one-off job fallback. The dashboard password hash belongs in Render's environment variables.
 
 ## Neon Setup
 
