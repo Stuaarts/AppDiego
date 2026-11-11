@@ -33,8 +33,7 @@ def save_products(
     id_column: int | None,
     currency: str,
 ) -> ImportedProducts:
-    link_count = sum(_has_link(str(row[index])) for _, row in table.rows for index in link_columns)
-    if link_count > MAX_LINKS:
+    if count_import_links(table, link_columns) > MAX_LINKS:
         raise ValueError(f"Salve até {MAX_LINKS} links por arquivo.")
 
     products_created = listings_created = listings_existing = 0
@@ -44,7 +43,7 @@ def save_products(
         if not name or len(name) > 255:
             issues.append((line, "Nome do produto ausente ou muito longo."))
             continue
-        links = _valid_links(table.headers, line, row, link_columns, issues)
+        links = valid_import_links(table.headers, line, row, link_columns, issues)
         if not links:
             issues.append((line, "Nenhum link de produto válido."))
             continue
@@ -90,11 +89,15 @@ def save_products(
     return ImportedProducts(products_created, listings_created, listings_existing, issues)
 
 
+def count_import_links(table: ImportedTable, columns: tuple[int, ...]) -> int:
+    return sum(_has_link(str(row[index])) for _, row in table.rows for index in columns)
+
+
 def _has_link(value: str) -> bool:
     return bool(value.strip(" ,;-"))
 
 
-def _valid_links(
+def valid_import_links(
     headers: tuple[str, ...],
     line: int,
     row: tuple[str | int | float, ...],

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from typing import Protocol
 
@@ -160,51 +160,52 @@ async def _scrape_listing(
         listing = session.get(Listing, listing_id)
         if listing is None or not listing.active:
             return ScrapeResult(success=False, error_code="invalid_listing")
-        context_base = _context_from_listing(listing)
+        context = _context_from_listing(listing)
+        adapter_key = listing.store.adapter_key
 
-    fetch = await fetcher.fetch(context_base.url)
+    result = await fetch_price(context, fetcher, adapter_key)
+    _record_result(session_factory, run_id=run_id, listing_id=listing_id, result=result)
+    return result
+
+
+async def fetch_price(
+    context: ScrapeContext, fetcher: Fetcher, adapter_key: str = "generic"
+) -> ScrapeResult:
+    try:
+        fetch = await fetcher.fetch(context.url)
+    except ValueError:
+        return ScrapeResult(success=False, error_code="invalid_url")
     if not fetch.ok:
-        result = ScrapeResult(
+        return ScrapeResult(
             success=False,
-            currency=context_base.currency,
+            currency=context.currency,
             availability="unknown",
             http_status=fetch.status_code,
             response_time_ms=fetch.response_time_ms,
             error_code=fetch.error_code or "request_error",
             error_message=fetch.error_message,
         )
-    else:
-        context = ScrapeContext(
-            **{
-                **context_base.__dict__,
-                "html": fetch.html,
-                "http_status": fetch.status_code,
-                "response_time_ms": fetch.response_time_ms,
-                "content_fingerprint": fetch.content_fingerprint,
-            }
-        )
-        adapter = get_adapter(_get_adapter_key(session_factory, listing_id))
-        try:
-            result = await adapter.extract(context)
-        except Exception as exc:
-            result = ScrapeResult(
-                success=False,
-                currency=context.currency,
-                http_status=context.http_status,
-                response_time_ms=context.response_time_ms,
-                error_code="unexpected_error",
-                error_message=sanitize_error_message(str(exc)),
-                content_fingerprint=context.content_fingerprint,
+    try:
+        return await get_adapter(adapter_key).extract(
+            replace(
+                context,
+                url=fetch.url,
+                html=fetch.html,
+                http_status=fetch.status_code,
+                response_time_ms=fetch.response_time_ms,
+                content_fingerprint=fetch.content_fingerprint,
             )
-
-    _record_result(session_factory, run_id=run_id, listing_id=listing_id, result=result)
-    return result
-
-
-def _get_adapter_key(session_factory: sessionmaker[Session], listing_id: int) -> str:
-    with session_factory() as session:
-        listing = session.get(Listing, listing_id)
-        return listing.store.adapter_key if listing else "generic"
+        )
+    except Exception as exc:
+        return ScrapeResult(
+            success=False,
+            currency=context.currency,
+            http_status=fetch.status_code,
+            response_time_ms=fetch.response_time_ms,
+            error_code="unexpected_error",
+            error_message=sanitize_error_message(str(exc)),
+            content_fingerprint=fetch.content_fingerprint,
+        )
 
 
 def _context_from_listing(listing: Listing) -> ScrapeContext:

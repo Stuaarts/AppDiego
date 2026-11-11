@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from urllib.parse import urlsplit
+
+from bs4 import BeautifulSoup
+
 from price_monitor.config import load_settings
 from price_monitor.scraping.base import ScrapeContext, ScrapeResult
 from price_monitor.scraping.browser import fetch_rendered_html
@@ -36,14 +41,24 @@ class GenericStoreAdapter:
                 error_message="Pagina parece exigir CAPTCHA ou verificacao manual.",
             )
 
+        amazon = urlsplit(context.url).hostname in {"amazon.com.br", "www.amazon.com.br"}
         metadata = extract_product_metadata(
             html,
             default_currency=context.currency,
-            price_selector=context.price_selector,
+            price_selector=context.price_selector
+            or (
+                "#corePrice_feature_div .a-price:not(.a-text-price) .a-offscreen"
+                if amazon
+                else None
+            ),
             regular_price_selector=context.regular_price_selector,
             availability_selector=context.availability_selector,
             title_selector=context.title_selector,
         )
+        if amazon and metadata.price is not None and not metadata.seller_name:
+            seller = BeautifulSoup(html, "lxml").select_one("#sellerProfileTriggerId")
+            if seller is not None:
+                metadata = replace(metadata, seller_name=seller.get_text(" ", strip=True) or None)
         if metadata.price is None and _should_try_browser(context):
             rendered = await fetch_rendered_html(
                 context.url,
@@ -107,8 +122,11 @@ class GenericStoreAdapter:
 
 
 def _looks_like_captcha(html: str) -> bool:
-    lowered = html.lower()
-    return "captcha" in lowered or "cf-challenge" in lowered or "robot check" in lowered
+    soup = BeautifulSoup(html, "lxml")
+    title = soup.title.get_text(" ", strip=True).lower() if soup.title else ""
+    return any(term in title for term in ("captcha", "robot check", "just a moment")) or (
+        soup.select_one("form[action*='validateCaptcha'], form#challenge-form") is not None
+    )
 
 
 def _should_try_browser(context: ScrapeContext) -> bool:

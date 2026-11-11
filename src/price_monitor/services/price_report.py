@@ -52,6 +52,7 @@ class PriceReport:
     rows: list[PriceRow] = field(default_factory=list)
     issues: list[tuple[int, str, str]] = field(default_factory=list)
     from_catalogs: bool = False
+    from_links: bool = False
 
 
 def read_import(data: bytes, *, is_excel: bool, sheet_name: str | None = None) -> ImportedTable:
@@ -224,7 +225,7 @@ def lookup_prices(
             for offer in result.offers
         )
         if not result.offers:
-            report.issues.append((line, query, "Nenhuma oferta encontrada."))
+            report.issues.append((line, query, "Nenhuma oferta nos catálogos consultados."))
         if result.unavailable_stores:
             stores = ", ".join(result.unavailable_stores)
             report.issues.append((line, query, f"Lojas indisponíveis: {stores}"))
@@ -241,11 +242,16 @@ def report_to_xlsx(report: PriceReport) -> bytes:
     if report.from_catalogs:
         headers += ["Loja", "Consulta", "EAN", "URL"]
         widths += [25, 40, 19, 50]
+    if report.from_links:
+        headers += ["Loja", "URL"]
+        widths += [30, 60]
     sheet.append(headers)
     for offer in sorted(report.rows, key=lambda row: (row.price, row.product.casefold())):
         values = [offer.price, offer.product, offer.seller]
         if report.from_catalogs:
             values += [offer.store, offer.query, offer.barcode, offer.url]
+        if report.from_links:
+            values += [offer.store, offer.url]
         _append_values(sheet, values)
         sheet.cell(sheet.max_row, 1).number_format = '"R$" #,##0.00'
     _format_table(sheet, "TabelaPrecos", widths)
@@ -256,6 +262,8 @@ def report_to_xlsx(report: PriceReport) -> bytes:
         for issue in sorted(report.issues):
             _append_values(issues, issue)
         _format_table(issues, "TabelaPendencias", [20, 46, 76])
+        if not report.rows:
+            workbook.active = issues
 
     output = BytesIO()
     workbook.save(output)

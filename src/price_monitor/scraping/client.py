@@ -56,13 +56,7 @@ class ScrapeHttpClient:
         ) as client:
             for attempt in range(self.settings.max_retries + 1):
                 try:
-                    response = await client.get(current_url)
-                    current_url, redirect_error = self._handle_redirect(response, current_url)
-                    if redirect_error:
-                        return redirect_error
-                    if response.is_redirect:
-                        continue
-                    return self._response_to_result(response, current_url, start)
+                    return await self._fetch_with_redirects(client, current_url, start)
                 except httpx.TimeoutException as exc:
                     if attempt >= self.settings.max_retries:
                         return self._exception_result("request_timeout", exc, current_url, start)
@@ -74,6 +68,23 @@ class ScrapeHttpClient:
                         return self._exception_result("unexpected_error", exc, current_url, start)
                 await asyncio.sleep(0.5 * (2**attempt))
         return HttpFetchResult(ok=False, url=current_url, error_code="unexpected_error")
+
+    async def _fetch_with_redirects(
+        self, client: httpx.AsyncClient, url: str, start: float
+    ) -> HttpFetchResult:
+        for _ in range(6):
+            response = await client.get(url)
+            if not response.is_redirect:
+                return self._response_to_result(response, url, start)
+            url, error = self._handle_redirect(response, url)
+            if error:
+                return error
+        return HttpFetchResult(
+            ok=False,
+            url=url,
+            error_code="too_many_redirects",
+            error_message="A loja redirecionou a página muitas vezes.",
+        )
 
     def _handle_redirect(
         self, response: httpx.Response, current_url: str

@@ -85,10 +85,10 @@ def normalize_availability(value: str | None) -> str:
     limited = ["limited", "baixo estoque", "ultimas unidades", "last units"]
     preorder = ["preorder", "pre-order", "pre venda", "pre-venda"]
     backorder = ["backorder", "sob encomenda"]
-    if any(term in text for term in positive):
-        return "in_stock"
     if any(term in text for term in negative):
         return "out_of_stock"
+    if any(term in text for term in positive):
+        return "in_stock"
     if any(term in text for term in limited):
         return "limited"
     if any(term in text for term in preorder):
