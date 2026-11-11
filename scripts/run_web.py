@@ -23,7 +23,12 @@ LOGGER = logging.getLogger("price_monitor.scheduler")
 def main() -> int:
     logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
     settings = load_settings()
-    if settings.enable_internal_scheduler:
+    database_ready = _prepare_database()
+    if not database_ready and not settings.is_production:
+        return 1
+    if not database_ready:
+        LOGGER.warning("Starting with catalog search and reports because database setup failed.")
+    if database_ready and settings.enable_internal_scheduler:
         thread = threading.Thread(target=_scheduler_loop, daemon=True)
         thread.start()
     port = os.getenv("PORT", "8501")
@@ -37,8 +42,19 @@ def main() -> int:
             "--server.address=0.0.0.0",
             f"--server.port={port}",
             "--server.headless=true",
-        ]
+        ],
+        env={**os.environ, "PRICE_MONITOR_DATABASE_READY": "1" if database_ready else "0"},
     )
+
+
+def _prepare_database() -> bool:
+    for args in (["scripts/ensure_schema.py"], ["-m", "alembic", "upgrade", "head"]):
+        try:
+            subprocess.run([sys.executable, *args], check=True, timeout=30, capture_output=True)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            LOGGER.error("Database setup failed during %s.", " ".join(args))
+            return False
+    return True
 
 
 def _scheduler_loop() -> None:

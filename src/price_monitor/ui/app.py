@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import streamlit as st
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -29,10 +31,8 @@ def main() -> None:
     inject_style()
     try:
         settings = _settings()
-        session_factory = _session_factory(settings)
-    except Exception as exc:
+    except ValueError:
         st.error("Falha ao iniciar a aplicacao.")
-        st.code(str(exc))
         return
 
     if not require_auth(settings):
@@ -40,25 +40,31 @@ def main() -> None:
 
     st.sidebar.title(TEXT["app_title"])
     render_logout(settings)
+    options = [TEXT["search"], TEXT["import"]]
+    if os.getenv("PRICE_MONITOR_DATABASE_READY") == "0":
+        st.sidebar.warning("Banco de dados indisponível. Busca e relatórios estão disponíveis.")
+    else:
+        options.extend(
+            TEXT[key] for key in ("dashboard", "products", "stores", "history", "runs", "settings")
+        )
     page = st.sidebar.radio(
         "Navegacao",
-        [
-            TEXT["search"],
-            TEXT["import"],
-            TEXT["dashboard"],
-            TEXT["products"],
-            TEXT["stores"],
-            TEXT["history"],
-            TEXT["runs"],
-            TEXT["settings"],
-        ],
+        options,
     )
 
     if page == TEXT["search"]:
         search.render()
-    elif page == TEXT["import"]:
+        return
+    if page == TEXT["import"]:
         import_report.render()
-    elif page == TEXT["dashboard"]:
+        return
+    try:
+        session_factory = _session_factory(settings)
+    except Exception:
+        st.error("Banco de dados indisponível.")
+        return
+
+    if page == TEXT["dashboard"]:
         dashboard.render(session_factory, settings)
     elif page == TEXT["products"]:
         products.render(session_factory, settings)

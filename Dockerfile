@@ -53,4 +53,4 @@ EXPOSE 8501
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS "http://127.0.0.1:${PORT:-8501}/_stcore/health" || exit 1
 
-CMD ["sh", "-c", "python scripts/ensure_schema.py && python -m alembic upgrade head && python scripts/run_web.py"]
+CMD ["python", "scripts/run_web.py"]
