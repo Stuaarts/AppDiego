@@ -5,6 +5,8 @@ TEXT = {
     "login": "Entrar",
     "logout": "Sair",
     "invalid_password": "Senha invalida.",
+    "search": "Buscar preços",
+    "import": "Importar base",
     "dashboard": "Visao geral",
     "products": "Produtos",
     "stores": "Lojas",

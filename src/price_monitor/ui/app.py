@@ -8,7 +8,7 @@ from price_monitor.database import check_database, make_engine, make_session_fac
 from price_monitor.ui.auth import render_logout, require_auth
 from price_monitor.ui.components import inject_style
 from price_monitor.ui.i18n import TEXT
-from price_monitor.ui.pages import dashboard, history, products, runs, stores
+from price_monitor.ui.pages import dashboard, history, import_report, products, runs, search, stores
 from price_monitor.ui.pages import settings as settings_page
 
 
@@ -43,6 +43,8 @@ def main() -> None:
     page = st.sidebar.radio(
         "Navegacao",
         [
+            TEXT["search"],
+            TEXT["import"],
             TEXT["dashboard"],
             TEXT["products"],
             TEXT["stores"],
@@ -52,7 +54,11 @@ def main() -> None:
         ],
     )
 
-    if page == TEXT["dashboard"]:
+    if page == TEXT["search"]:
+        search.render()
+    elif page == TEXT["import"]:
+        import_report.render()
+    elif page == TEXT["dashboard"]:
         dashboard.render(session_factory, settings)
     elif page == TEXT["products"]:
         products.render(session_factory, settings)
