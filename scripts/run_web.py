@@ -13,7 +13,7 @@ from sqlalchemy import select
 
 from price_monitor.config import load_settings
 from price_monitor.database import make_engine, make_session_factory
-from price_monitor.models import ScrapeRun
+from price_monitor.models import Listing, ScrapeRun
 from price_monitor.services.scrape_service import ScrapeAlreadyRunningError, scrape
 from price_monitor.time import ensure_aware_utc, utc_now
 
@@ -89,7 +89,18 @@ def _scheduled_run_due(session_factory, interval: timedelta) -> bool:
             .order_by(ScrapeRun.started_at.desc())
             .limit(1)
         )
-        return latest is None or ensure_aware_utc(latest.started_at) < cutoff
+        if latest is None or ensure_aware_utc(latest.started_at) <= cutoff:
+            return True
+        new_listing = session.scalar(
+            select(Listing.id)
+            .where(
+                Listing.active.is_(True),
+                Listing.last_attempt_at.is_(None),
+                Listing.created_at > latest.started_at,
+            )
+            .limit(1)
+        )
+        return new_listing is not None
 
 
 if __name__ == "__main__":

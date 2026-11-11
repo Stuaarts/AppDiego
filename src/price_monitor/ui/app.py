@@ -56,7 +56,12 @@ def main() -> None:
         search.render()
         return
     if page == TEXT["import"]:
-        import_report.render()
+        import_report.render(
+            database_factory=(lambda: _session_factory(settings))
+            if os.getenv("PRICE_MONITOR_DATABASE_READY") != "0"
+            else None,
+            currency=settings.default_currency,
+        )
         return
     try:
         session_factory = _session_factory(settings)

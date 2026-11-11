@@ -4,6 +4,7 @@ import csv
 import re
 import unicodedata
 from collections.abc import Callable, Iterable
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from decimal import Decimal
 from io import BytesIO, StringIO
@@ -24,6 +25,8 @@ MAX_FILE_BYTES = 5_000_000
 MAX_ROWS = 10_000
 MAX_COLUMNS = 100
 MAX_SEARCHES = 20
+IMPORT_EXTENSIONS = ("csv", "tsv", "xlsx", "xlsm")
+EXCEL_EXTENSIONS = ("xlsx", "xlsm")
 type ImportValue = str | int | float
 
 
@@ -51,11 +54,16 @@ class PriceReport:
     from_catalogs: bool = False
 
 
-def read_import(data: bytes, *, is_excel: bool) -> ImportedTable:
+def read_import(data: bytes, *, is_excel: bool, sheet_name: str | None = None) -> ImportedTable:
     if not data or len(data) > MAX_FILE_BYTES:
         raise ValueError("Envie um arquivo de até 5 MB.")
     try:
-        return _read_excel(data) if is_excel else _read_rows(_csv_rows(data))
+        if not is_excel:
+            return _read_rows(_csv_rows(data))
+        with _open_excel(data) as workbook:
+            sheet = workbook[sheet_name] if sheet_name else workbook.worksheets[0]
+            sheet.reset_dimensions()
+            return _read_rows(sheet.values)
     except (
         BadZipFile,
         InvalidFileException,
@@ -72,24 +80,37 @@ def read_import(data: bytes, *, is_excel: bool) -> ImportedTable:
         ) from exc
 
 
-def _read_excel(data: bytes) -> ImportedTable:
-    with ZipFile(BytesIO(data)) as archive:
-        if sum(item.file_size for item in archive.infolist()) > 30_000_000:
-            raise ValueError("O conteúdo descompactado da planilha excede 30 MB.")
-    workbook = load_workbook(BytesIO(data), read_only=True, data_only=True, keep_links=False)
+def import_sheet_names(data: bytes) -> list[str]:
+    with _open_excel(data) as workbook:
+        return [sheet.title for sheet in workbook.worksheets if sheet.sheet_state == "visible"]
+
+
+@contextmanager
+def _open_excel(data: bytes) -> Iterable[Workbook]:
+    if not data or len(data) > MAX_FILE_BYTES:
+        raise ValueError("Envie um arquivo de até 5 MB.")
+    try:
+        with ZipFile(BytesIO(data)) as archive:
+            if sum(item.file_size for item in archive.infolist()) > 30_000_000:
+                raise ValueError("O conteúdo descompactado da planilha excede 30 MB.")
+        workbook = load_workbook(
+            BytesIO(data), read_only=True, data_only=True, keep_vba=False, keep_links=False
+        )
+    except (BadZipFile, InvalidFileException, DefusedXmlException, KeyError, SyntaxError) as exc:
+        raise ValueError("Não foi possível abrir a planilha do Excel.") from exc
     try:
         if not workbook.worksheets:
             raise ValueError("A planilha não contém abas de dados.")
-        sheet = workbook.worksheets[0]
-        sheet.reset_dimensions()
-        return _read_rows(sheet.values)
+        yield workbook
     finally:
         workbook.close()
 
 
 def _csv_rows(data: bytes) -> Iterable[list[str]]:
     try:
-        contents = data.decode("utf-8-sig")
+        contents = data.decode(
+            "utf-16" if data.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8-sig"
+        )
     except UnicodeDecodeError:
         contents = data.decode("cp1252")
     try:

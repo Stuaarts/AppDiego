@@ -71,7 +71,9 @@ class GenericStoreAdapter:
                     error_message=rendered.error_message,
                 )
 
-        if metadata.price is None:
+        if metadata.price is None or (
+            context.scraping_method == "structured" and metadata.method == "text_fallback"
+        ):
             return ScrapeResult(
                 success=False,
                 currency=metadata.currency or context.currency,
@@ -110,4 +112,6 @@ def _looks_like_captcha(html: str) -> bool:
 
 
 def _should_try_browser(context: ScrapeContext) -> bool:
-    return context.requires_browser or context.scraping_method == "browser"
+    return context.scraping_method != "structured" and (
+        context.requires_browser or context.scraping_method == "browser"
+    )
