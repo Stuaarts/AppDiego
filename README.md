@@ -247,7 +247,17 @@ The application blocks common SSRF targets, including local, private, link-local
 
 Exact selectors and extraction rules can break when a retailer changes its website. Some stores may block cloud-hosted IP addresses, require JavaScript, require authentication, present CAPTCHAs, prohibit automation, show region-specific prices, show prices only after selecting variants, separate marketplace sellers, or require shipping-location information.
 
-The MVP does not perform web-wide discovery, currency conversion, multi-user roles, or official retailer API integrations.
+The app does not perform web-wide discovery, currency conversion, or multi-user roles.
+
+### Marketplace Offers
+
+- Mercado Livre links with an explicit offer ID can use the official API. Configure
+  `MERCADO_LIVRE_ACCESS_TOKEN` as a secret with an authorized token. The app uses the
+  current sale price endpoint and the seller nickname for that item. Replace expired
+  tokens through the hosting dashboard. No token is required to use the rest of the app.
+- For a pending offer in an imported link report, open the offer and fill in
+  **Preço conferido** and **Vendedor conferido**. The Excel export marks the row as
+  **Conferência manual**. Those entries apply to the current report.
 
 ## Future Improvements
 

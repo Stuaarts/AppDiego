@@ -5,7 +5,7 @@ import re
 import unicodedata
 from collections.abc import Callable, Iterable
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from io import BytesIO, StringIO
 from zipfile import BadZipFile, ZipFile
@@ -45,6 +45,17 @@ class PriceRow:
     query: str = ""
     barcode: str = ""
     url: str = ""
+    origin: str = ""
+
+
+@dataclass(frozen=True)
+class OfferReview:
+    line: int
+    product: str
+    store: str
+    url: str
+    reason: str
+    price_row_index: int | None = None
 
 
 @dataclass
@@ -53,6 +64,33 @@ class PriceReport:
     issues: list[tuple[int, str, str]] = field(default_factory=list)
     from_catalogs: bool = False
     from_links: bool = False
+    reviews: list[OfferReview] = field(default_factory=list)
+
+
+def with_confirmed_offers(
+    report: PriceReport, confirmations: Iterable[tuple[ImportValue, str]]
+) -> PriceReport:
+    rows = list(report.rows)
+    reviews = []
+    for review, (value, seller) in zip(report.reviews, confirmations, strict=True):
+        price = _parse_brl(value)
+        seller = seller.strip()
+        if price is None or price <= 0 or not seller:
+            reviews.append(review)
+            continue
+        row = PriceRow(
+            price,
+            review.product,
+            seller,
+            store=review.store,
+            url=review.url,
+            origin="Conferência manual",
+        )
+        if review.price_row_index is None:
+            rows.append(row)
+        else:
+            rows[review.price_row_index] = row
+    return replace(report, rows=rows, reviews=reviews)
 
 
 def read_import(data: bytes, *, is_excel: bool, sheet_name: str | None = None) -> ImportedTable:
@@ -243,25 +281,36 @@ def report_to_xlsx(report: PriceReport) -> bytes:
         headers += ["Loja", "Consulta", "EAN", "URL"]
         widths += [25, 40, 19, 50]
     if report.from_links:
-        headers += ["Loja", "URL"]
-        widths += [30, 60]
+        headers += ["Loja", "URL", "Origem"]
+        widths += [30, 60, 24]
     sheet.append(headers)
     for offer in sorted(report.rows, key=lambda row: (row.price, row.product.casefold())):
         values = [offer.price, offer.product, offer.seller]
         if report.from_catalogs:
             values += [offer.store, offer.query, offer.barcode, offer.url]
         if report.from_links:
-            values += [offer.store, offer.url]
+            values += [offer.store, offer.url, offer.origin]
         _append_values(sheet, values)
         sheet.cell(sheet.max_row, 1).number_format = '"R$" #,##0.00'
     _format_table(sheet, "TabelaPrecos", widths)
 
-    if report.issues:
+    if report.issues or report.reviews:
         issues = workbook.create_sheet("Pendências")
-        issues.append(["Linha de origem", "Produto ou consulta", "Motivo"])
-        for issue in sorted(report.issues):
+        headers = ["Linha de origem", "Produto ou consulta", "Motivo"]
+        widths = [20, 46, 76]
+        pending = list(report.issues)
+        if report.from_links:
+            headers += ["Loja", "URL"]
+            widths += [30, 60]
+            pending = [(*issue, "", "") for issue in pending]
+            pending.extend(
+                (review.line, review.product, review.reason, review.store, review.url)
+                for review in report.reviews
+            )
+        issues.append(headers)
+        for issue in sorted(pending):
             _append_values(issues, issue)
-        _format_table(issues, "TabelaPendencias", [20, 46, 76])
+        _format_table(issues, "TabelaPendencias", widths)
         if not report.rows:
             workbook.active = issues
 

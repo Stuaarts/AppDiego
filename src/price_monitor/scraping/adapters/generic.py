@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from bs4 import BeautifulSoup
 
@@ -55,10 +55,26 @@ class GenericStoreAdapter:
             availability_selector=context.availability_selector,
             title_selector=context.title_selector,
         )
-        if amazon and metadata.price is not None and not metadata.seller_name:
+        if amazon and metadata.price is not None:
+            requested = parse_qs(urlsplit(context.requested_url or context.url).query).get(
+                "smid", []
+            )
             seller = BeautifulSoup(html, "lxml").select_one("#sellerProfileTriggerId")
+            if requested:
+                merchant = (
+                    parse_qs(urlsplit(str(seller.get("href", ""))).query).get("seller", [])
+                    if seller
+                    else []
+                )
+                if len(requested) != 1 or merchant != requested:
+                    return ScrapeResult(
+                        success=False,
+                        http_status=context.http_status,
+                        error_code="marketplace_offer_unverified",
+                    )
             if seller is not None:
-                metadata = replace(metadata, seller_name=seller.get_text(" ", strip=True) or None)
+                name = seller.get_text(" ", strip=True)
+                metadata = replace(metadata, seller_name=name or metadata.seller_name)
         if metadata.price is None and _should_try_browser(context):
             rendered = await fetch_rendered_html(
                 context.url,

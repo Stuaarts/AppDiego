@@ -31,6 +31,7 @@ class ScrapeContext:
     http_status: int | None = None
     response_time_ms: int | None = None
     content_fingerprint: str | None = None
+    requested_url: str | None = None
 
 
 @dataclass(frozen=True)

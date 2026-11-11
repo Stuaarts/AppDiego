@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from price_monitor.models import Listing, Product, Store
 from price_monitor.repositories.products import create_product
 from price_monitor.repositories.stores import create_store
+from price_monitor.scraping.mercado_livre import offer_id
 from price_monitor.security import normalize_public_url
 from price_monitor.services.price_report import ImportedTable
 
@@ -114,8 +115,15 @@ def valid_import_links(
             if valid and valid.ok and len(valid.normalized_url) <= 2048:
                 host = urlsplit(valid.normalized_url).hostname
                 if host and len(host) <= 255:
-                    links[valid.normalized_url] = host
-                    continue
+                    identifier = offer_id(url)
+                    identity_url = (
+                        f"{valid.normalized_url}#wid={identifier}"
+                        if identifier
+                        else valid.normalized_url
+                    )
+                    if len(identity_url) <= 2048:
+                        links[identity_url] = host
+                        continue
         except ValueError:
             pass
         issues.append((line, f"{headers[index]}: link inválido ou inacessível."))

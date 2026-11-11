@@ -7,7 +7,7 @@ from dataclasses import replace
 from price_monitor.config import Settings
 from price_monitor.scraping.base import ScrapeContext, ScrapeResult
 from price_monitor.scraping.client import ScrapeHttpClient
-from price_monitor.services.price_report import ImportedTable, PriceReport, PriceRow
+from price_monitor.services.price_report import ImportedTable, OfferReview, PriceReport, PriceRow
 from price_monitor.services.product_import import count_import_links, valid_import_links
 from price_monitor.services.scrape_service import Fetcher, fetch_price
 
@@ -22,6 +22,11 @@ FAILURES = {
     "request_timeout": "A loja não respondeu a tempo.",
     "price_not_found": "A página não expôs um preço verificável.",
     "invalid_url": "A página ou destino do redirecionamento é inválido.",
+    "marketplace_offer_unverified": "Não foi possível confirmar a oferta do vendedor do link.",
+    "marketplace_offer_inactive": "A oferta do vendedor está inativa ou sem estoque.",
+    "marketplace_api_denied": "A API do Mercado Livre recusou a autorização.",
+    "marketplace_api_required": "Conecte a API do Mercado Livre para confirmar esta oferta.",
+    "marketplace_api_unavailable": "A API do Mercado Livre não respondeu.",
 }
 
 
@@ -67,15 +72,33 @@ async def report_link_prices(
         elif result.success and result.price is not None and result.availability == "out_of_stock":
             reason = "Produto indisponível na loja."
         elif result.success and result.price is not None and result.currency == "BRL":
+            if not result.seller_name:
+                report.reviews.append(
+                    OfferReview(
+                        line, product, host, url, "Vendedor não informado.", len(report.rows)
+                    )
+                )
+            origin = (
+                "API Mercado Livre"
+                if result.extraction_method == "mercado_livre_api"
+                else "Página da loja"
+            )
             report.rows.append(
-                PriceRow(result.price, product, result.seller_name or "", store=host, url=url)
+                PriceRow(
+                    result.price,
+                    product,
+                    result.seller_name or "",
+                    store=host,
+                    url=url,
+                    origin=origin,
+                )
             )
             continue
         elif result.success and result.currency != "BRL":
             reason = "A página informa preço em outra moeda."
         else:
             reason = FAILURES.get(result.error_code, "Não foi possível consultar a página.")
-        report.issues.append((line, product, f"{host}: {reason}"))
+        report.reviews.append(OfferReview(line, product, host, url, reason))
     return report
 
 

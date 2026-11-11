@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import uuid
 from dataclasses import dataclass, replace
 from datetime import timedelta
@@ -14,6 +15,7 @@ from price_monitor.config import Settings
 from price_monitor.models import Listing, PriceObservation, RunLock, ScrapeRun
 from price_monitor.scraping.base import ScrapeContext, ScrapeResult
 from price_monitor.scraping.client import HttpFetchResult, ScrapeHttpClient
+from price_monitor.scraping.mercado_livre import fetch_mercado_livre_offer, offer_id
 from price_monitor.scraping.registry import get_adapter
 from price_monitor.security import sanitize_error_message
 from price_monitor.time import ensure_aware_utc, utc_now
@@ -172,6 +174,12 @@ async def fetch_price(
     context: ScrapeContext, fetcher: Fetcher, adapter_key: str = "generic"
 ) -> ScrapeResult:
     try:
+        identifier = offer_id(context.url)
+        token = os.getenv("MERCADO_LIVRE_ACCESS_TOKEN", "").strip()
+        if identifier:
+            if not token:
+                return ScrapeResult(success=False, error_code="marketplace_api_required")
+            return await fetch_mercado_livre_offer(identifier, token)
         fetch = await fetcher.fetch(context.url)
     except ValueError:
         return ScrapeResult(success=False, error_code="invalid_url")
@@ -190,6 +198,7 @@ async def fetch_price(
             replace(
                 context,
                 url=fetch.url,
+                requested_url=context.url,
                 html=fetch.html,
                 http_status=fetch.status_code,
                 response_time_ms=fetch.response_time_ms,

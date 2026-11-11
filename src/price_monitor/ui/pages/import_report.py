@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from hashlib import sha256
+from uuid import uuid4
 
+import pandas as pd
 import streamlit as st
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
@@ -16,12 +18,14 @@ from price_monitor.services.price_report import (
     IMPORT_EXTENSIONS,
     MAX_SEARCHES,
     ImportedTable,
+    PriceReport,
     import_prices,
     import_sheet_names,
     lookup_prices,
     normalize_header,
     read_import,
     report_to_xlsx,
+    with_confirmed_offers,
 )
 from price_monitor.services.product_import import save_products
 from price_monitor.ui.i18n import TEXT
@@ -129,18 +133,16 @@ def render(
                 else:
                     product, price, seller = selected
                     report = import_prices(table, product=product, price=price, seller=seller)
-                st.session_state["price_import_report"] = (
-                    signature,
-                    len(report.rows),
-                    len(report.issues),
-                    report_to_xlsx(report),
-                )
+                st.session_state["price_import_report"] = (signature, report, uuid4().hex)
         except ValueError as exc:
             st.error(str(exc))
 
     saved = st.session_state.get("price_import_report")
     if saved is not None and saved[0] == signature:
-        _, rows, issues, workbook = saved
+        _, report, run_key = saved
+        if report.reviews:
+            report = _review_offers(report, run_key)
+        rows, issues = len(report.rows), len(report.issues) + len(report.reviews)
         if rows:
             st.write(f"{rows} ofertas no relatório.")
         else:
@@ -149,10 +151,64 @@ def render(
             st.warning(f"{issues} ocorrências na aba Pendências.")
         st.download_button(
             "Baixar Excel",
-            data=workbook,
+            data=report_to_xlsx(report),
             file_name="relatorio_de_precos.xlsx",
             mime=MIME_XLSX,
         )
+
+
+def _review_offers(report: PriceReport, run_key: str) -> PriceReport:
+    st.subheader("Conferir ofertas pendentes")
+    data = pd.DataFrame(
+        [
+            {
+                "Linha": review.line,
+                "Produto": review.product,
+                "Loja": review.store,
+                "Motivo": review.reason,
+                "Oferta": review.url,
+                "Preço conferido": (
+                    float(report.rows[review.price_row_index].price)
+                    if review.price_row_index is not None
+                    else None
+                ),
+                "Vendedor conferido": "",
+            }
+            for review in report.reviews
+        ]
+    )
+    data["Preço conferido"] = data["Preço conferido"].astype(float)
+    edited = st.data_editor(
+        data,
+        hide_index=True,
+        disabled=["Linha", "Produto", "Loja", "Motivo", "Oferta"],
+        column_order=[
+            "Linha",
+            "Loja",
+            "Produto",
+            "Preço conferido",
+            "Vendedor conferido",
+            "Oferta",
+            "Motivo",
+        ],
+        column_config={
+            "Linha": st.column_config.NumberColumn(width="small"),
+            "Produto": st.column_config.TextColumn(width="medium"),
+            "Oferta": st.column_config.LinkColumn(display_text="Abrir oferta", width="small"),
+            "Preço conferido": st.column_config.NumberColumn(
+                min_value=0.01, max_value=9999999999.99, step=0.01, format="R$ %.2f"
+            ),
+            "Vendedor conferido": st.column_config.TextColumn(max_chars=180),
+        },
+        key=f"offer_review_{run_key}",
+    )
+    confirmations = (
+        (float(price) if pd.notna(price) else "", seller if isinstance(seller, str) else "")
+        for price, seller in zip(
+            edited["Preço conferido"], edited["Vendedor conferido"], strict=True
+        )
+    )
+    return with_confirmed_offers(report, confirmations)
 
 
 def _find_column(headers: tuple[str, ...], aliases: tuple[str, ...]) -> int | None:
